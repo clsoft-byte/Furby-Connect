@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import java.util.UUID
 import kotlin.coroutines.resume
 
@@ -65,8 +66,23 @@ class FurbyBleRepositoryImpl(
 
 
     override suspend fun connect(device: BleDevice) {
-        val item = scanner.getDeviceByAddress(device.address) ?: return
-        connection.connect(item.device)
+        val item = scanner.getDeviceByAddress(device.address)
+            ?: throw IllegalArgumentException("No se encontró el dispositivo ${device.address} en el escaneo")
+
+        withTimeout(15_000L) {
+            suspendCancellableCoroutine<Unit> { cont ->
+                connection.onConnected = {
+                    if (cont.isActive) cont.resume(Unit)
+                }
+                connection.onConnectionFailed = { status ->
+                    if (cont.isActive) cont.cancel(IllegalStateException("Conexión BLE fallida (status=$status)"))
+                }
+                connection.onDisconnected = {
+                    if (cont.isActive) cont.cancel(IllegalStateException("Conexión BLE cerrada"))
+                }
+                connection.connect(item.device)
+            }
+        }
     }
 
     override suspend fun disconnect() {
@@ -74,6 +90,12 @@ class FurbyBleRepositoryImpl(
     }
 
     override suspend fun discoverServices(): List<BleService> = suspendCancellableCoroutine { cont ->
+        val cachedServices = connection.getLastDiscoveredServices()
+        if (cachedServices.isNotEmpty()) {
+            cont.resume(cachedServices.map { it.toDomain() })
+            return@suspendCancellableCoroutine
+        }
+
         connection.onServicesDiscovered = { services ->
             cont.resume(services.map { it.toDomain() })
         }

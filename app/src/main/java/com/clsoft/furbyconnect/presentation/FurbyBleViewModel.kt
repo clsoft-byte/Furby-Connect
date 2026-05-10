@@ -45,15 +45,24 @@ class FurbyBleViewModel @Inject constructor(
     }
 
     fun connect(device: BleDevice) = viewModelScope.launch {
-        status.value = "Conectando a ${device.name}"
-        connectUseCase(device)
-        status.value = "Conectado"
+        runCatching {
+            status.value = "Conectando a ${device.name}..."
+            connectUseCase(device)
+            status.value = "Conexión BLE exitosa"
+            discoverServices()
+        }.onFailure {
+            status.value = it.message ?: "No se pudo conectar"
+        }
     }
 
     fun discoverServices() = viewModelScope.launch {
-        status.value = "Descubriendo servicios..."
-        services.value = discoverServicesUseCase()
-        status.value = "Servicios listos"
+        runCatching {
+            status.value = "Descubriendo servicios..."
+            services.value = discoverServicesUseCase()
+            status.value = if (services.value.isEmpty()) "Conectado, pero sin servicios" else "Servicios listos"
+        }.onFailure {
+            status.value = "Error al descubrir servicios"
+        }
     }
 
     fun sendCommand(serviceUuid: String, characteristicUuid: String, hex: String) = viewModelScope.launch {
