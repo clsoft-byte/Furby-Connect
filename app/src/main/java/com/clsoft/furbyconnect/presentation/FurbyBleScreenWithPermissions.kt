@@ -42,7 +42,7 @@ fun FurbyBleScreenWithPermissions(
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
         }
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         launcher.launch(permissions.toTypedArray())
@@ -54,7 +54,7 @@ fun FurbyBleScreenWithPermissions(
         statusMessage = status,
         selectedCharacteristic = selectedCharacteristic,
         onStartScan = { viewModel.scanDevices() },
-        onStopScan = {  },
+        onStopScan = { viewModel.stopScan() },
         onConnect = { device -> viewModel.connect(device) },
         onSelectCharacteristic = { char -> viewModel.selectCharacteristic(char) },
         onSendHexCommand = { hex ->
