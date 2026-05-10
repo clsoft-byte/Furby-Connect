@@ -8,10 +8,10 @@ import com.clsoft.furbyconnect.domain.model.BleCharacteristic
 import com.clsoft.furbyconnect.domain.model.BleDevice
 import com.clsoft.furbyconnect.domain.model.BleService
 import com.clsoft.furbyconnect.domain.repository.FurbyBleRepository
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import kotlin.coroutines.resume
 
@@ -20,26 +20,43 @@ class FurbyBleRepositoryImpl(
     private val connection: BleConnectionManager
 ) : FurbyBleRepository {
 
-    override suspend fun scanDevices(): List<BleDevice>  {
-        val devices = mutableListOf<BleDevice>()
-        val lock = CompletableDeferred<Unit>()
+    companion object {
+        private const val MAX_SCAN_DURATION_MS = 12_000L
+        private const val MIN_SCAN_DURATION_MS = 3_000L
+        private const val IDLE_STOP_WINDOW_MS = 2_500L
+        private const val POLL_INTERVAL_MS = 250L
+    }
 
-        scanner.startScan { item ->
-            devices.add(item.toDomain())
+    override suspend fun scanDevices(): List<BleDevice>  {
+        var lastDiscoveryAt = System.currentTimeMillis()
+        val scanStartedAt = lastDiscoveryAt
+
+        scanner.startScan {
+            lastDiscoveryAt = System.currentTimeMillis()
         }
 
-        // Esperar hasta timeout
         try {
-            withTimeout(5000) {
-                lock.await() // No bloquea la UI, solo espera
+            withTimeoutOrNull(MAX_SCAN_DURATION_MS) {
+                while (isActive) {
+                    delay(POLL_INTERVAL_MS)
+                    val now = System.currentTimeMillis()
+                    val reachedMinDuration = now - scanStartedAt >= MIN_SCAN_DURATION_MS
+                    val idleForTooLong = now - lastDiscoveryAt >= IDLE_STOP_WINDOW_MS
+
+                    if (reachedMinDuration && idleForTooLong) {
+                        break
+                    }
+                }
             }
-        } catch (e: TimeoutCancellationException) {
-            // Timeout alcanzado, stop scan
+        } finally {
             scanner.stopScan()
         }
 
+        return scanner.getAllDevices().map { it.toDomain() }
+    }
+
+    override fun stopScan() {
         scanner.stopScan()
-        return devices
     }
 
     override fun stopScan() {
