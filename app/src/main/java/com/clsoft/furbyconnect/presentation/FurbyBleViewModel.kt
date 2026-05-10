@@ -9,6 +9,7 @@ import com.clsoft.furbyconnect.domain.usecase.ConnectToDeviceUseCase
 import com.clsoft.furbyconnect.domain.usecase.DiscoverServicesUseCase
 import com.clsoft.furbyconnect.domain.usecase.ScanBleDevicesUseCase
 import com.clsoft.furbyconnect.domain.usecase.SendCommandUseCase
+import com.clsoft.furbyconnect.domain.usecase.StopScanBleDevicesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -17,6 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FurbyBleViewModel @Inject constructor(
     private val scanUseCase: ScanBleDevicesUseCase,
+    private val stopScanUseCase: StopScanBleDevicesUseCase,
     private val connectUseCase: ConnectToDeviceUseCase,
     private val discoverServicesUseCase: DiscoverServicesUseCase,
     private val sendCommandUseCase: SendCommandUseCase
@@ -28,9 +30,18 @@ class FurbyBleViewModel @Inject constructor(
     val selectedCharacteristic = MutableStateFlow<BleCharacteristic?>(null)
 
     fun scanDevices() = viewModelScope.launch {
-        status.value = "Buscando..."
-        devices.value = scanUseCase()
-        status.value = "Scan completado"
+        runCatching {
+            status.value = "Buscando..."
+            devices.value = scanUseCase()
+            status.value = if (devices.value.isEmpty()) "Scan completado: sin dispositivos" else "Scan completado"
+        }.onFailure {
+            status.value = "Error durante el escaneo"
+        }
+    }
+
+    fun stopScan() {
+        stopScanUseCase()
+        status.value = "Escaneo detenido"
     }
 
     fun connect(device: BleDevice) = viewModelScope.launch {
@@ -46,6 +57,10 @@ class FurbyBleViewModel @Inject constructor(
     }
 
     fun sendCommand(serviceUuid: String, characteristicUuid: String, hex: String) = viewModelScope.launch {
+        if (hex.isBlank()) {
+            status.value = "Ingresa un comando HEX"
+            return@launch
+        }
         status.value = "Enviando comando..."
         val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
         status.value = if (success) "Comando enviado" else "Error al enviar"
