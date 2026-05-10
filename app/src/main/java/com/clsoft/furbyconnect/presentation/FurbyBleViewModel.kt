@@ -1,0 +1,57 @@
+package com.clsoft.furbyconnect.presentation
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.clsoft.furbyconnect.domain.model.BleCharacteristic
+import com.clsoft.furbyconnect.domain.model.BleDevice
+import com.clsoft.furbyconnect.domain.model.BleService
+import com.clsoft.furbyconnect.domain.usecase.ConnectToDeviceUseCase
+import com.clsoft.furbyconnect.domain.usecase.DiscoverServicesUseCase
+import com.clsoft.furbyconnect.domain.usecase.ScanBleDevicesUseCase
+import com.clsoft.furbyconnect.domain.usecase.SendCommandUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class FurbyBleViewModel @Inject constructor(
+    private val scanUseCase: ScanBleDevicesUseCase,
+    private val connectUseCase: ConnectToDeviceUseCase,
+    private val discoverServicesUseCase: DiscoverServicesUseCase,
+    private val sendCommandUseCase: SendCommandUseCase
+) : ViewModel() {
+
+    val devices = MutableStateFlow<List<BleDevice>>(emptyList())
+    val services = MutableStateFlow<List<BleService>>(emptyList())
+    val status = MutableStateFlow("Idle")
+    val selectedCharacteristic = MutableStateFlow<BleCharacteristic?>(null)
+
+    fun scanDevices() = viewModelScope.launch {
+        status.value = "Buscando..."
+        devices.value = scanUseCase()
+        status.value = "Scan completado"
+    }
+
+    fun connect(device: BleDevice) = viewModelScope.launch {
+        status.value = "Conectando a ${device.name}"
+        connectUseCase(device)
+        status.value = "Conectado"
+    }
+
+    fun discoverServices() = viewModelScope.launch {
+        status.value = "Descubriendo servicios..."
+        services.value = discoverServicesUseCase()
+        status.value = "Servicios listos"
+    }
+
+    fun sendCommand(serviceUuid: String, characteristicUuid: String, hex: String) = viewModelScope.launch {
+        status.value = "Enviando comando..."
+        val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
+        status.value = if (success) "Comando enviado" else "Error al enviar"
+    }
+
+    fun selectCharacteristic(characteristic: BleCharacteristic) {
+        selectedCharacteristic.value = characteristic
+    }
+}
