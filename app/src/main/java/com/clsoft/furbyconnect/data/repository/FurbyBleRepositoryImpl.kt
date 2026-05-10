@@ -24,6 +24,9 @@ class FurbyBleRepositoryImpl(
         private const val MAX_SCAN_DURATION_MS = 20_000L
         private const val MIN_SCAN_DURATION_MS = 8_000L
         private const val IDLE_STOP_WINDOW_MS = 6_000L
+        private const val MAX_SCAN_DURATION_MS = 12_000L
+        private const val MIN_SCAN_DURATION_MS = 3_000L
+        private const val IDLE_STOP_WINDOW_MS = 2_500L
         private const val POLL_INTERVAL_MS = 250L
     }
 
@@ -62,6 +65,7 @@ class FurbyBleRepositoryImpl(
     override fun stopScan() {
         scanner.stopScan()
     }
+
 
     override suspend fun connect(device: BleDevice) {
         val item = scanner.getDeviceByAddress(device.address) ?: return
