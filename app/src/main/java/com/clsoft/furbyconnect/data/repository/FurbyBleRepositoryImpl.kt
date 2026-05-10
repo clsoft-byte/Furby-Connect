@@ -42,6 +42,10 @@ class FurbyBleRepositoryImpl(
         return devices
     }
 
+    override fun stopScan() {
+        scanner.stopScan()
+    }
+
     override suspend fun connect(device: BleDevice) {
         val item = scanner.getDeviceByAddress(device.address) ?: return
         connection.connect(item.device)

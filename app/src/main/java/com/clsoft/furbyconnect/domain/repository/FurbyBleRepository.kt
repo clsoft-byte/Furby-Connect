@@ -5,6 +5,7 @@ import com.clsoft.furbyconnect.domain.model.BleService
 
 interface FurbyBleRepository {
     suspend fun scanDevices(): List<BleDevice>
+    fun stopScan()
     suspend fun connect(device: BleDevice)
     suspend fun disconnect()
     suspend fun discoverServices(): List<BleService>
