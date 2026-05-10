@@ -66,13 +66,23 @@ class FurbyBleViewModel @Inject constructor(
     }
 
     fun sendCommand(serviceUuid: String, characteristicUuid: String, hex: String) = viewModelScope.launch {
-        if (hex.isBlank()) {
+        val normalizedHex = hex.replace(" ", "")
+        if (normalizedHex.isBlank()) {
             status.value = "Ingresa un comando HEX"
             return@launch
         }
-        status.value = "Enviando comando..."
-        val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
-        status.value = if (success) "Comando enviado" else "Error al enviar"
+        if (normalizedHex.length % 2 != 0 || normalizedHex.any { !it.isDigit() && it.lowercaseChar() !in 'a'..'f' }) {
+            status.value = "HEX inválido. Usa pares como: 01 0A FF"
+            return@launch
+        }
+
+        runCatching {
+            status.value = "Enviando comando..."
+            val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
+            status.value = if (success) "Comando enviado" else "Error al enviar (revisa characteristic writable/conexión)"
+        }.onFailure {
+            status.value = "Error al enviar: ${it.message ?: "desconocido"}"
+        }
     }
 
     fun selectCharacteristic(characteristic: BleCharacteristic) {

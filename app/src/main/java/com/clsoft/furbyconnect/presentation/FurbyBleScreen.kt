@@ -3,9 +3,11 @@ package com.clsoft.furbyconnect.presentation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.clsoft.furbyconnect.domain.model.BleCharacteristic
 import com.clsoft.furbyconnect.domain.model.BleDevice
@@ -24,6 +26,8 @@ fun FurbyBleScreen(
     onSendHexCommand: (String) -> Unit
 ) {
     val hexCommand = remember { mutableStateOf("") }
+    val normalizedHex = hexCommand.value.replace(" ", "")
+    val hasValidHex = normalizedHex.isNotBlank() && normalizedHex.length % 2 == 0 && normalizedHex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
 
     Column(
         modifier = Modifier
@@ -80,6 +84,13 @@ fun FurbyBleScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(text = "Enviar comando HEX", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = selectedCharacteristic?.let {
+                "Destino: ${it.serviceUuid} / ${it.characteristicUuid}"
+            } ?: "Destino: selecciona un servicio/característica",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selectedCharacteristic != null) Color(0xFF2E7D32) else Color(0xFFB00020)
+        )
         OutlinedTextField(
             value = hexCommand.value,
             onValueChange = { hexCommand.value = it },
@@ -91,6 +102,7 @@ fun FurbyBleScreen(
 
         Button(
             onClick = { onSendHexCommand(hexCommand.value) },
+            enabled = selectedCharacteristic != null && hasValidHex,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Enviar")
@@ -128,13 +140,27 @@ private fun ServiceCard(
     selectedCharacteristic: BleCharacteristic?,
     onSelectCharacteristic: (BleCharacteristic) -> Unit
 ) {
+    val firstWritable = service.characteristics.firstOrNull {
+        it.canWrite || it.canWriteWithoutResponse
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = firstWritable != null) {
+                    firstWritable?.let(onSelectCharacteristic)
+                }
+                .padding(12.dp)
+        ) {
             Text("Service UUID: ${service.uuid}")
+            if (firstWritable != null) {
+                Text("(Toca el servicio para seleccionar una característica writable)")
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -142,7 +168,10 @@ private fun ServiceCard(
                 val isSelected =
                     selectedCharacteristic?.characteristicUuid == characteristic.characteristicUuid
 
-                Text("Characteristic UUID: ${characteristic.characteristicUuid}")
+                Text(
+                    "Characteristic UUID: ${characteristic.characteristicUuid}",
+                    modifier = Modifier.clickable { onSelectCharacteristic(characteristic) }
+                )
                 Text("READ: ${characteristic.canRead}")
                 Text("WRITE: ${characteristic.canWrite}")
                 Text("WRITE_NO_RESPONSE: ${characteristic.canWriteWithoutResponse}")
