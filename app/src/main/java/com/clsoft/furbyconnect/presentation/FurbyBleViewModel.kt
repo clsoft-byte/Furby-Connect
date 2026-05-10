@@ -45,25 +45,44 @@ class FurbyBleViewModel @Inject constructor(
     }
 
     fun connect(device: BleDevice) = viewModelScope.launch {
-        status.value = "Conectando a ${device.name}"
-        connectUseCase(device)
-        status.value = "Conectado"
+        runCatching {
+            status.value = "Conectando a ${device.name}..."
+            connectUseCase(device)
+            status.value = "Conexión BLE exitosa"
+            discoverServices()
+        }.onFailure {
+            status.value = it.message ?: "No se pudo conectar"
+        }
     }
 
     fun discoverServices() = viewModelScope.launch {
-        status.value = "Descubriendo servicios..."
-        services.value = discoverServicesUseCase()
-        status.value = "Servicios listos"
+        runCatching {
+            status.value = "Descubriendo servicios..."
+            services.value = discoverServicesUseCase()
+            status.value = if (services.value.isEmpty()) "Conectado, pero sin servicios" else "Servicios listos"
+        }.onFailure {
+            status.value = "Error al descubrir servicios"
+        }
     }
 
     fun sendCommand(serviceUuid: String, characteristicUuid: String, hex: String) = viewModelScope.launch {
-        if (hex.isBlank()) {
+        val normalizedHex = hex.replace(" ", "")
+        if (normalizedHex.isBlank()) {
             status.value = "Ingresa un comando HEX"
             return@launch
         }
-        status.value = "Enviando comando..."
-        val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
-        status.value = if (success) "Comando enviado" else "Error al enviar"
+        if (normalizedHex.length % 2 != 0 || normalizedHex.any { !it.isDigit() && it.lowercaseChar() !in 'a'..'f' }) {
+            status.value = "HEX inválido. Usa pares como: 01 0A FF"
+            return@launch
+        }
+
+        runCatching {
+            status.value = "Enviando comando..."
+            val success = sendCommandUseCase(serviceUuid, characteristicUuid, hex)
+            status.value = if (success) "Comando enviado" else "Error al enviar (revisa characteristic writable/conexión)"
+        }.onFailure {
+            status.value = "Error al enviar: ${it.message ?: "desconocido"}"
+        }
     }
 
     fun selectCharacteristic(characteristic: BleCharacteristic) {
