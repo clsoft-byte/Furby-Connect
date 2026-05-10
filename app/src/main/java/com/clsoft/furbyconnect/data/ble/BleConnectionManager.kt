@@ -10,8 +10,11 @@ import java.util.*
 
 class BleConnectionManager(private val context: Context) {
     private var bluetoothGatt: BluetoothGatt? = null
+    private var isConnected = false
+    private var lastServices: List<BleServiceItem> = emptyList()
 
     var onConnected: (() -> Unit)? = null
+    var onConnectionFailed: ((Int) -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
     var onServicesDiscovered: ((List<BleServiceItem>) -> Unit)? = null
     var onWriteResult: ((Boolean, String) -> Unit)? = null
@@ -19,12 +22,23 @@ class BleConnectionManager(private val context: Context) {
     private val callback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                isConnected = false
+                onConnectionFailed?.invoke(status)
+                gatt.close()
+                bluetoothGatt = null
+                return
+            }
+
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    isConnected = true
                     onConnected?.invoke()
                     gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    isConnected = false
+                    lastServices = emptyList()
                     onDisconnected?.invoke()
                     close()
                 }
@@ -34,6 +48,7 @@ class BleConnectionManager(private val context: Context) {
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 val services = gatt.services.map { it.toBleServiceItem() }
+                lastServices = services
                 onServicesDiscovered?.invoke(services)
             }
         }
@@ -52,8 +67,14 @@ class BleConnectionManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice) {
         close()
+        isConnected = false
+        lastServices = emptyList()
         bluetoothGatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
     }
+
+    fun isConnected(): Boolean = isConnected
+
+    fun getLastDiscoveredServices(): List<BleServiceItem> = lastServices
 
     @SuppressLint("MissingPermission")
     fun writeHexCommand(serviceUuid: UUID, characteristicUuid: UUID, hex: String): Boolean {
@@ -86,7 +107,11 @@ class BleConnectionManager(private val context: Context) {
     fun disconnect() { bluetoothGatt?.disconnect(); close() }
 
     @SuppressLint("MissingPermission")
-    fun close() { bluetoothGatt?.close(); bluetoothGatt = null }
+    fun close() {
+        bluetoothGatt?.close()
+        bluetoothGatt = null
+        isConnected = false
+    }
 
     private fun BluetoothGattCharacteristic.hasProperty(property: Int) = properties and property != 0
 
