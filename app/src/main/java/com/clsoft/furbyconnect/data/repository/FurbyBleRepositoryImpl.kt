@@ -21,6 +21,9 @@ class FurbyBleRepositoryImpl(
 ) : FurbyBleRepository {
 
     companion object {
+        private const val MAX_SCAN_DURATION_MS = 20_000L
+        private const val MIN_SCAN_DURATION_MS = 8_000L
+        private const val IDLE_STOP_WINDOW_MS = 6_000L
         private const val MAX_SCAN_DURATION_MS = 12_000L
         private const val MIN_SCAN_DURATION_MS = 3_000L
         private const val IDLE_STOP_WINDOW_MS = 2_500L
@@ -31,8 +34,12 @@ class FurbyBleRepositoryImpl(
         var lastDiscoveryAt = System.currentTimeMillis()
         val scanStartedAt = lastDiscoveryAt
 
-        scanner.startScan {
+        val started = scanner.startScan {
             lastDiscoveryAt = System.currentTimeMillis()
+        }
+
+        if (!started) {
+            return emptyList()
         }
 
         try {
@@ -59,9 +66,6 @@ class FurbyBleRepositoryImpl(
         scanner.stopScan()
     }
 
-    override fun stopScan() {
-        scanner.stopScan()
-    }
 
     override suspend fun connect(device: BleDevice) {
         val item = scanner.getDeviceByAddress(device.address) ?: return

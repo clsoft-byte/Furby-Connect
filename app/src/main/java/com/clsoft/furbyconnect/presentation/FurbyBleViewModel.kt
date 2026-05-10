@@ -33,7 +33,7 @@ class FurbyBleViewModel @Inject constructor(
         runCatching {
             status.value = "Buscando..."
             devices.value = scanUseCase()
-            status.value = "Scan completado"
+            status.value = if (devices.value.isEmpty()) "Scan completado: sin dispositivos" else "Scan completado"
         }.onFailure {
             status.value = "Error durante el escaneo"
         }
